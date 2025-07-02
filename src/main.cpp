@@ -17,7 +17,7 @@ void mainLoop()
 
 int main()
 {
-    InitWindow(gameScreenWidth, gameScreenHeight, "Game Template");
+    InitWindow(gameScreenWidth, gameScreenHeight, "Ten Minutes");
     InitAudioDevice();
 #ifndef EMSCRIPTEN_BUILD
     SetWindowState(FLAG_WINDOW_RESIZABLE);
