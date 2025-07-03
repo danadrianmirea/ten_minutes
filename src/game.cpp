@@ -28,8 +28,6 @@ Game::Game(int width, int height)
     player.edgeY = 0;
 
     gameActive = true;
-    gameOverTimer = 0;
-    gameOverDelay = 2.0f; // 2 seconds
     autoFire = false;
     shootTimer = 0;
     fireRate = 0.3f; // 0.3 seconds between shots
@@ -168,9 +166,13 @@ void Game::HandleInput()
         {
             autoFire = false;
         }
+    }
 
-        // R key to restart when game over
-        if (IsKeyPressed(KEY_R) && !gameActive)
+    // Left click to restart when game over
+    if (!gameActive)
+    {
+        // Check for left mouse click to restart
+        if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
         {
             ResetSurvivalGame();
         }
@@ -906,11 +908,7 @@ void Game::UpdateSurvivalGame(float dt)
 {
     if (!gameActive)
     {
-        gameOverTimer += dt;
-        if (gameOverTimer >= gameOverDelay)
-        {
-            ResetSurvivalGame();
-        }
+        // Game over - wait for player to press R to restart
         return;
     }
 
@@ -999,7 +997,6 @@ void Game::UpdateSurvivalGame(float dt)
         if (enemyIt->CollidesWithPlayer(player.x, player.y, player.radius))
         {
             gameActive = false;
-            gameOverTimer = 0;
             break;
         }
 
@@ -1063,7 +1060,7 @@ void Game::DrawSurvivalGame()
     {
         // Draw game over screen
         DrawText("GAME OVER", width / 2 - 150, height / 2 - 40, 40, RED);
-        DrawText("Press R to restart", width / 2 - 120, height / 2 + 40, 20, WHITE);
+        DrawText("Left click to restart", width / 2 - 140, height / 2 + 40, 20, WHITE);
     }
 }
 

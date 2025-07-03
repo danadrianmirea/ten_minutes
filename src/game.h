@@ -69,8 +69,6 @@ private:
     std::vector<Bullet> bullets;
     std::vector<Enemy> enemies;
     bool gameActive;
-    float gameOverTimer;
-    float gameOverDelay;
     bool autoFire;
     float shootTimer;
     float fireRate;
