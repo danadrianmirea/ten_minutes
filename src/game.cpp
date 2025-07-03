@@ -21,6 +21,30 @@ Game::Game(int width, int height)
     ballSpeed = 300.0f;
     ballColor = RED;
 
+    // Initialize survival game components
+    player.x = width / 2;
+    player.y = height / 2;
+    player.radius = 20;
+    player.speed = 300;
+    player.angle = 0;
+    player.gunEndX = 0;
+    player.gunEndY = 0;
+    player.edgeX = 0;
+    player.edgeY = 0;
+
+    gameActive = true;
+    gameOverTimer = 0;
+    gameOverDelay = 2.0f; // 2 seconds
+    autoFire = false;
+    shootTimer = 0;
+    fireRate = 0.3f; // 0.3 seconds between shots
+    enemySpawnRate = 2.0f; // 2 seconds between spawns
+    lastEnemySpawn = 0;
+    maxEnemies = 10;
+    crosshairSize = 20;
+    crosshairThickness = 2;
+    crosshairGap = 4;
+
 #ifdef __EMSCRIPTEN__
     isMobile = EM_ASM_INT({
         return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -73,6 +97,9 @@ void Game::InitGame()
     screenScale = MIN((float)GetScreenWidth() / gameScreenWidth, (float)GetScreenHeight() / gameScreenHeight);
 
     PlayMusicStream(backgroundMusic);
+    
+    // Initialize survival game
+    ResetSurvivalGame();
 }
 
 void Game::Reset()
@@ -85,6 +112,9 @@ void Game::Reset()
     isMusicPlaying = true;
     ballX = width / 2;
     ballY = height / 2;
+    
+    // Reset survival game
+    ResetSurvivalGame();
 }
 
 void Game::Update(float dt)
@@ -111,6 +141,7 @@ void Game::Update(float dt)
     if (running)
     {
         HandleInput();
+        UpdateSurvivalGame(dt);
     }
 }
 
@@ -118,6 +149,41 @@ void Game::HandleInput()
 {
     float dt = GetFrameTime();
 
+    // Handle survival game input
+    if (gameActive)
+    {
+        // Mouse input for shooting
+        if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+        {
+            autoFire = true;
+            // Force immediate first shot
+            shootTimer = GetTime() - fireRate - 1.0f;
+        }
+        if (IsMouseButtonReleased(MOUSE_LEFT_BUTTON))
+        {
+            autoFire = false;
+        }
+
+        // Spacebar for shooting
+        if (IsKeyPressed(KEY_SPACE))
+        {
+            autoFire = true;
+            // Force immediate first shot
+            shootTimer = GetTime() - fireRate - 1.0f;
+        }
+        if (IsKeyReleased(KEY_SPACE))
+        {
+            autoFire = false;
+        }
+
+        // R key to restart when game over
+        if (IsKeyPressed(KEY_R) && !gameActive)
+        {
+            ResetSurvivalGame();
+        }
+    }
+
+    // Original template input handling (keeping for compatibility)
     if(!isMobile) {
         if(IsKeyDown(KEY_W) || IsKeyDown(KEY_UP)) {
             ballY -= ballSpeed * dt;
@@ -707,11 +773,9 @@ void Game::DrawOptionsMenu()
     const int menuItemHeight = 60;
     const int sliderWidth = 250;
     const int sliderHeight = 20;
-    const int menuWidth = 500;
-    const int menuHeight = 280;
 
     // Draw menu background
-    DrawRectangle(menuStartX - 10, menuStartY - 10, menuWidth, menuHeight, {0, 0, 0, 200});
+    DrawRectangle(menuStartX - 10, menuStartY - 10, 500, 280, {0, 0, 0, 200});
 
     // Draw menu title
     DrawText("Options", menuStartX, menuStartY, 20, WHITE);
@@ -750,7 +814,12 @@ void Game::Draw()
 {
     // Render everything to the texture
     BeginTextureMode(targetRenderTex);
-    ClearBackground(GRAY);
+    ClearBackground(BLACK); // Changed to black for survival game
+    
+    // Draw survival game
+    DrawSurvivalGame();
+    
+    // Draw original template elements (keeping for compatibility)
     DrawCircle(ballX, ballY, ballRadius, ballColor);
     DrawFPS(10, 10);
     DrawUI();
@@ -782,4 +851,282 @@ std::string Game::FormatWithLeadingZeroes(int number, int width)
 
 void Game::Randomize()
 {
+}
+
+// Survival game method implementations
+
+void Game::Bullet::Update(float dt)
+{
+    x += cosf(angle) * speed * dt;
+    y += sinf(angle) * speed * dt;
+}
+
+bool Game::Bullet::IsOffScreen(int screenWidth, int screenHeight)
+{
+    return (x < 0 || x > screenWidth || y < 0 || y > screenHeight);
+}
+
+void Game::Bullet::Draw() const
+{
+    DrawCircle(x, y, radius, WHITE);
+}
+
+Game::Enemy::Enemy(float playerX, float playerY, int screenWidth, int screenHeight)
+{
+    (void)playerX; // Suppress unused parameter warning
+    (void)playerY; // Suppress unused parameter warning
+    
+    radius = 18;
+    speed = 100;
+    
+    // Spawn from outside the screen
+    int side = GetRandomValue(0, 3); // 0: top, 1: right, 2: bottom, 3: left
+    
+    if (side == 0) // top
+    {
+        x = GetRandomValue(0, screenWidth);
+        y = -radius;
+    }
+    else if (side == 1) // right
+    {
+        x = screenWidth + radius;
+        y = GetRandomValue(0, screenHeight);
+    }
+    else if (side == 2) // bottom
+    {
+        x = GetRandomValue(0, screenWidth);
+        y = screenHeight + radius;
+    }
+    else // left
+    {
+        x = -radius;
+        y = GetRandomValue(0, screenHeight);
+    }
+}
+
+void Game::Enemy::Update(float dt, float playerX, float playerY)
+{
+    // Calculate direction towards player
+    float dx = playerX - x;
+    float dy = playerY - y;
+    float distance = sqrtf(dx * dx + dy * dy);
+    
+    if (distance > 0.1f) // Avoid division by zero
+    {
+        // Normalize and scale by speed
+        x += (dx / distance) * speed * dt;
+        y += (dy / distance) * speed * dt;
+    }
+}
+
+void Game::Enemy::Draw() const
+{
+    DrawCircle(x, y, radius, RED);
+}
+
+bool Game::Enemy::CollidesWithPlayer(float playerX, float playerY, float playerRadius)
+{
+    float distance = sqrtf((x - playerX) * (x - playerX) + (y - playerY) * (y - playerY));
+    return distance < (radius + playerRadius);
+}
+
+bool Game::Enemy::CollidesWithBullet(const Bullet& bullet)
+{
+    float distance = sqrtf((x - bullet.x) * (x - bullet.x) + (y - bullet.y) * (y - bullet.y));
+    return distance < (radius + bullet.radius);
+}
+
+void Game::SpawnEnemy()
+{
+    if (enemies.size() < static_cast<size_t>(maxEnemies))
+    {
+        enemies.emplace_back(player.x, player.y, width, height);
+    }
+}
+
+void Game::ResetSurvivalGame()
+{
+    player.x = width / 2;
+    player.y = height / 2;
+    bullets.clear();
+    enemies.clear();
+    gameActive = true;
+    autoFire = false;
+    shootTimer = 0;
+    lastEnemySpawn = 0;
+}
+
+void Game::UpdateSurvivalGame(float dt)
+{
+    if (!gameActive)
+    {
+        gameOverTimer += dt;
+        if (gameOverTimer >= gameOverDelay)
+        {
+            ResetSurvivalGame();
+        }
+        return;
+    }
+
+    // Get mouse position
+    Vector2 mousePos = GetMousePosition();
+    float mouseX = (mousePos.x - (GetScreenWidth() - (gameScreenWidth * screenScale)) * 0.5f) / screenScale;
+    float mouseY = (mousePos.y - (GetScreenHeight() - (gameScreenHeight * screenScale)) * 0.5f) / screenScale;
+
+    // Handle movement
+    float moveDx = 0;
+    float moveDy = 0;
+
+    if (IsKeyDown(KEY_W))
+        moveDy -= player.speed * dt;
+    if (IsKeyDown(KEY_S))
+        moveDy += player.speed * dt;
+    if (IsKeyDown(KEY_A))
+        moveDx -= player.speed * dt;
+    if (IsKeyDown(KEY_D))
+        moveDx += player.speed * dt;
+
+    // Calculate new position
+    float newX = player.x + moveDx;
+    float newY = player.y + moveDy;
+
+    // Check boundaries and update position
+    if (newX - player.radius >= 0 && newX + player.radius <= width)
+        player.x = newX;
+    if (newY - player.radius >= 0 && newY + player.radius <= height)
+        player.y = newY;
+
+    // Update gun angle and position
+    float aimDx = mouseX - player.x;
+    float aimDy = mouseY - player.y;
+    player.angle = atan2f(aimDy, aimDx);
+
+    // Calculate the point on the circle's edge where the gun should be
+    player.edgeX = player.x + player.radius * cosf(player.angle);
+    player.edgeY = player.y + player.radius * sinf(player.angle);
+
+    // Calculate the end point of the gun line
+    player.gunEndX = player.edgeX + player.radius * 0.6f * cosf(player.angle);
+    player.gunEndY = player.edgeY + player.radius * 0.6f * sinf(player.angle);
+
+    // Handle shooting
+    if (autoFire && GetTime() - shootTimer >= fireRate)
+    {
+        // Create new bullet
+        Bullet bullet;
+        bullet.x = player.edgeX;
+        bullet.y = player.edgeY;
+        bullet.angle = player.angle;
+        bullet.speed = 300;
+        bullet.radius = 4;
+        bullets.push_back(bullet);
+        shootTimer = GetTime();
+    }
+
+    // Enemy spawning
+    if (GetTime() - lastEnemySpawn >= enemySpawnRate)
+    {
+        SpawnEnemy();
+        lastEnemySpawn = GetTime();
+    }
+
+    // Update bullets
+    for (auto it = bullets.begin(); it != bullets.end();)
+    {
+        it->Update(dt);
+        if (it->IsOffScreen(width, height))
+        {
+            it = bullets.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+
+    // Update enemies and check for collisions
+    for (auto enemyIt = enemies.begin(); enemyIt != enemies.end();)
+    {
+        enemyIt->Update(dt, player.x, player.y);
+
+        // Check for enemy-player collision
+        if (enemyIt->CollidesWithPlayer(player.x, player.y, player.radius))
+        {
+            gameActive = false;
+            gameOverTimer = 0;
+            break;
+        }
+
+        // Check for enemy-bullet collisions
+        bool enemyHit = false;
+        for (auto bulletIt = bullets.begin(); bulletIt != bullets.end();)
+        {
+            if (enemyIt->CollidesWithBullet(*bulletIt))
+            {
+                bulletIt = bullets.erase(bulletIt);
+                enemyHit = true;
+                break;
+            }
+            else
+            {
+                ++bulletIt;
+            }
+        }
+
+        if (enemyHit)
+        {
+            enemyIt = enemies.erase(enemyIt);
+            SpawnEnemy(); // Spawn a new enemy
+        }
+        else
+        {
+            ++enemyIt;
+        }
+    }
+}
+
+void Game::DrawSurvivalGame()
+{
+    if (gameActive)
+    {
+        // Draw player
+        DrawCircle(player.x, player.y, player.radius, BLUE);
+
+        // Draw gun line
+        DrawLine(player.edgeX, player.edgeY, player.gunEndX, player.gunEndY, GREEN);
+
+        // Draw bullets
+        for (const auto& bullet : bullets)
+        {
+            bullet.Draw();
+        }
+
+        // Draw enemies
+        for (const auto& enemy : enemies)
+        {
+            enemy.Draw();
+        }
+
+        // Draw crosshair
+        Vector2 mousePos = GetMousePosition();
+        float mouseX = (mousePos.x - (GetScreenWidth() - (gameScreenWidth * screenScale)) * 0.5f) / screenScale;
+        float mouseY = (mousePos.y - (GetScreenHeight() - (gameScreenHeight * screenScale)) * 0.5f) / screenScale;
+        DrawCrosshair(mouseX, mouseY);
+    }
+    else
+    {
+        // Draw game over screen
+        DrawText("GAME OVER", width / 2 - 150, height / 2 - 40, 40, RED);
+        DrawText("Press R to restart", width / 2 - 120, height / 2 + 40, 20, WHITE);
+    }
+}
+
+void Game::DrawCrosshair(float mouseX, float mouseY)
+{
+    // Horizontal line
+    DrawLine(mouseX - crosshairSize / 2, mouseY, mouseX - crosshairGap / 2, mouseY, WHITE);
+    DrawLine(mouseX + crosshairGap / 2, mouseY, mouseX + crosshairSize / 2, mouseY, WHITE);
+    // Vertical line
+    DrawLine(mouseX, mouseY - crosshairSize / 2, mouseX, mouseY - crosshairGap / 2, WHITE);
+    DrawLine(mouseX, mouseY + crosshairGap / 2, mouseX, mouseY + crosshairSize / 2, WHITE);
 }
