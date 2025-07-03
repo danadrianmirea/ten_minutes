@@ -122,12 +122,6 @@ private:
     int width;
     int height;
 
-    float ballX;
-    float ballY;
-    int ballRadius;
-    float ballSpeed;
-    Color ballColor;
-
     Music backgroundMusic;
     Sound actionSound;
 };

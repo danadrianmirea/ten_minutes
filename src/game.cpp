@@ -15,11 +15,6 @@ bool Game::isMobile = false;
 Game::Game(int width, int height)
 {
     isInitialLaunch = true;
-    ballX = width / 2;
-    ballY = height / 2;
-    ballRadius = 50;
-    ballSpeed = 300.0f;
-    ballColor = RED;
 
     // Initialize survival game components
     player.x = width / 2;
@@ -110,8 +105,6 @@ void Game::Reset()
     isInMainMenu = false;
     isInitialLaunch = false;
     isMusicPlaying = true;
-    ballX = width / 2;
-    ballY = height / 2;
     
     // Reset survival game
     ResetSurvivalGame();
@@ -180,52 +173,6 @@ void Game::HandleInput()
         if (IsKeyPressed(KEY_R) && !gameActive)
         {
             ResetSurvivalGame();
-        }
-    }
-
-    // Original template input handling (keeping for compatibility)
-    if(!isMobile) {
-        if(IsKeyDown(KEY_W) || IsKeyDown(KEY_UP)) {
-            ballY -= ballSpeed * dt;
-        }
-        else if(IsKeyDown(KEY_S) || IsKeyDown(KEY_DOWN)) {
-            ballY += ballSpeed * dt;
-        }
-
-        if(IsKeyDown(KEY_A) || IsKeyDown(KEY_LEFT)) {
-            ballX -= ballSpeed * dt;
-        }
-        else if(IsKeyDown(KEY_D) || IsKeyDown(KEY_RIGHT)) {
-            ballX += ballSpeed * dt;
-        }
-
-        if (IsKeyPressed(KEY_SPACE)) {
-            if (actionSound.stream.buffer != NULL) {
-                StopSound(actionSound);
-                PlaySound(actionSound);
-            } 
-        }
-    } 
-    else // mobile controls
-    {
-        if(IsGestureDetected(GESTURE_DRAG) || IsGestureDetected(GESTURE_HOLD)) {
-            Vector2 touchPosition = GetTouchPosition(0);
-            // Convert screen coordinates to game coordinates
-            float gameX = (touchPosition.x - (GetScreenWidth() - (gameScreenWidth * screenScale)) * 0.5f) / screenScale;
-            float gameY = (touchPosition.y - (GetScreenHeight() - (gameScreenHeight * screenScale)) * 0.5f) / screenScale;
-            
-            Vector2 ballCenter = { ballX, ballY };
-            Vector2 direction = { gameX - ballCenter.x, gameY - ballCenter.y };
-            
-            // Normalize the direction vector
-            float length = sqrtf(direction.x * direction.x + direction.y * direction.y);
-            if(length > 0) {
-                direction.x /= length;
-                direction.y /= length;
-                
-                ballX += direction.x * ballSpeed * dt;
-                ballY += direction.y * ballSpeed * dt;
-            }
         }
     }
 }
@@ -820,7 +767,6 @@ void Game::Draw()
     DrawSurvivalGame();
     
     // Draw original template elements (keeping for compatibility)
-    DrawCircle(ballX, ballY, ballRadius, ballColor);
     DrawFPS(10, 10);
     DrawUI();
     EndTextureMode();
